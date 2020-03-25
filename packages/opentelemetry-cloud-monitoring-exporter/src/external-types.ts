@@ -16,7 +16,7 @@ import { Logger } from '@opentelemetry/api';
 
 export interface StackdriverExporterOptions {
   /**
-   * Google Cloud Platform project ID where your metrics will be stored.
+   * Google Cloud Platform project ID where your traces will be stored.
    * This is optional and will be inferred from your authentication
    * credentials or from the GCP environment when not specified.
    */
@@ -41,6 +41,11 @@ export interface StackdriverExporterOptions {
    * Object containing client_email and private_key properties
    */
   credentials?: Credentials;
+  /**
+   * Prefix for metric overrides the OpenTelemetry prefix
+   * of a stackdriver metric. Optional
+   */
+  prefix?: string;
 }
 
 export interface Credentials {

@@ -12,5 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export * from './external-types';
-export * from './monitoring';
+import * as assert from 'assert';
+import { StackdriverMetricExporter } from '../src';
+
+describe('StackdriverMetricExporter', () => {
+  describe('constructor', () => {
+    it('should construct an exporter', () => {
+      const exporter = new StackdriverMetricExporter();
+      assert.ok(typeof exporter.export === 'function');
+      assert.ok(typeof exporter.shutdown === 'function');
+    });
+  });
+});
