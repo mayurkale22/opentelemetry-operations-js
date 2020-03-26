@@ -33,19 +33,18 @@ const OT_USER_AGENT = {
 const OT_REQUEST_HEADER = {
   'x-opentelemetry-outgoing-request': 0x1,
 };
-
 google.options({ headers: OT_REQUEST_HEADER });
-const monitoring = google.monitoring('v3');
 
 /**
  * Format and sends metrics information to StackDriver Monitoring.
  */
 export class StackdriverMetricExporter implements MetricExporter {
-  private readonly _projectId: string | void | Promise<string | void>;
+  private _projectId: string | void | Promise<string | void>;
   private readonly _metricPrefix: string;
   private readonly _displayNamePrefix: string;
   private readonly _logger: Logger;
   private readonly _auth: GoogleAuth;
+  private readonly _startTime = new Date().toISOString();
 
   static readonly DEFAULT_DISPLAY_NAME_PREFIX: string = 'OpenTelemetry';
   static readonly CUSTOM_OPENTELEMETRY_DOMAIN: string =
@@ -55,6 +54,8 @@ export class StackdriverMetricExporter implements MetricExporter {
     string,
     OTMetricDescriptor
   > = new Map();
+
+  private static readonly _monitoring = google.monitoring('v3');
 
   constructor(options: StackdriverExporterOptions = {}) {
     this._logger = options.logger || new NoopLogger();
@@ -89,22 +90,31 @@ export class StackdriverMetricExporter implements MetricExporter {
     metrics: MetricRecord[],
     cb: (result: ExportResult) => void
   ): Promise<void> {
-    const timeSeries: TimeSeries[] = [];
+    if (this._projectId instanceof Promise) {
+      this._projectId = await this._projectId;
+    }
 
+    if (!this._projectId) {
+      return cb(ExportResult.FAILED_NOT_RETRYABLE);
+    }
+
+    this._logger.debug('StackDriver Monitoring export');
+    const timeSeries: TimeSeries[] = [];
     for (const metric of metrics) {
       const isRegistered = await this._registerMetricDescriptor(
         metric.descriptor
       );
       if (isRegistered) {
-        timeSeries.push(createTimeSeries(metric, this._metricPrefix));
+        timeSeries.push(
+          createTimeSeries(metric, this._metricPrefix, this._startTime)
+        );
       }
     }
     this._sendTimeSeries(timeSeries);
+    cb(ExportResult.SUCCESS);
   }
 
-  shutdown(): void {
-    throw new Error('Method not implemented.');
-  }
+  shutdown(): void {}
 
   /**
    * Returns true if the given metricDescriptor is successfully registered to
@@ -149,20 +159,20 @@ export class StackdriverMetricExporter implements MetricExporter {
    * Creates a new metric descriptor.
    * @param metricDescriptor The OpenTelemetry MetricDescriptor.
    */
-  private _createMetricDescriptor(metricDescriptor: OTMetricDescriptor) {
-    return this._authorize().then(authClient => {
-      const request = {
-        name: `projects/${this._projectId}`,
-        resource: transformMetricDescriptor(
-          metricDescriptor,
-          this._metricPrefix,
-          this._displayNamePrefix
-        ),
-        auth: authClient,
-      };
-
+  private async _createMetricDescriptor(metricDescriptor: OTMetricDescriptor) {
+    const authClient = await this._authorize();
+    const request = {
+      name: `projects/${this._projectId}`,
+      resource: transformMetricDescriptor(
+        metricDescriptor,
+        this._metricPrefix,
+        this._displayNamePrefix
+      ),
+      auth: authClient,
+    };
+    try {
       return new Promise((resolve, reject) => {
-        monitoring.projects.metricDescriptors.create(
+        StackdriverMetricExporter._monitoring.projects.metricDescriptors.create(
           request,
           { headers: OT_REQUEST_HEADER, userAgentDirectives: [OT_USER_AGENT] },
           (err: Error | null) => {
@@ -170,12 +180,12 @@ export class StackdriverMetricExporter implements MetricExporter {
             err ? reject(err) : resolve();
           }
         );
-      }).catch(err => {
-        this._logger.error(
-          `StackdriverMetricExporter: Failed to write data: ${err.message}`
-        );
       });
-    });
+    } catch (err) {
+      this._logger.error(
+        `StackdriverMetricExporter: Failed to write data: ${err.message}`
+      );
+    }
   }
 
   private async _sendTimeSeries(timeSeries: TimeSeries[]) {
@@ -191,7 +201,7 @@ export class StackdriverMetricExporter implements MetricExporter {
       };
 
       return new Promise((resolve, reject) => {
-        monitoring.projects.timeSeries.create(
+        StackdriverMetricExporter._monitoring.projects.timeSeries.create(
           request,
           { headers: OT_REQUEST_HEADER, userAgentDirectives: [OT_USER_AGENT] },
           (err: Error | null) => {

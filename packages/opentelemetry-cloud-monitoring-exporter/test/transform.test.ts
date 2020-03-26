@@ -13,11 +13,15 @@
 // limitations under the License.
 
 import * as assert from 'assert';
-import { TEST_ONLY, transformMetricDescriptor, createTimeSeries } from '../src/transform';
+import {
+  TEST_ONLY,
+  transformMetricDescriptor,
+  createTimeSeries,
+} from '../src/transform';
 import {
   MetricKind as OTMetricKind,
   MetricDescriptor as OTMetricDescriptor,
-  MeterProvider
+  MeterProvider,
 } from '@opentelemetry/metrics';
 import { ValueType as OTValueType, Labels } from '@opentelemetry/api';
 import { MetricKind, ValueType, MetricDescriptor } from '../src/types';
@@ -141,15 +145,6 @@ describe('transform', () => {
   });
 
   describe('TimeSeries', () => {
-    it('should return a Stackdriver Int Point', () => {
-      const pt = TEST_ONLY.transformPoint(OTValueType.INT, 10);
-      assert.deepStrictEqual(pt.value, {int64Value: 10});
-    });
-    it('should return a Stackdriver Double Point', () => {
-      const pt = TEST_ONLY.transformPoint(OTValueType.DOUBLE, 10.5);
-      assert.deepStrictEqual(pt.value, {doubleValue: 10.5});
-    });
-
     it('should return a Stackdriver Metric', () => {
       const meter = new MeterProvider().getMeter('test-meter');
       const labels: Labels = { ['keyb']: 'value2', ['keya']: 'value1' };
@@ -157,23 +152,23 @@ describe('transform', () => {
 
       const counter = meter.createCounter(METRIC_NAME, {
         description: METRIC_DESCRIPTION,
-        labelKeys: ['keya', 'keyb']
-      })
+        labelKeys: ['keya', 'keyb'],
+      });
       counter.bind(labelSet).add(10);
       meter.collect();
       const [record] = meter.getBatcher().checkPointSet();
-      const ts = createTimeSeries(record, 'otel');
-      assert.strictEqual(ts.metric.type, "otel/metric-name");
-      assert.strictEqual(ts.metric.labels['keya'], "value1");
-      assert.strictEqual(ts.metric.labels['keyb'], "value2");
+      const ts = createTimeSeries(record, 'otel', new Date().toISOString());
+      assert.strictEqual(ts.metric.type, 'otel/metric-name');
+      assert.strictEqual(ts.metric.labels['keya'], 'value1');
+      assert.strictEqual(ts.metric.labels['keyb'], 'value2');
       assert.deepStrictEqual(ts.resource, {
-        "labels": {},
-        "type": "global"
-        });
+        labels: {},
+        type: 'global',
+      });
       assert.strictEqual(ts.metricKind, MetricKind.CUMULATIVE);
       assert.strictEqual(ts.valueType, ValueType.DOUBLE);
       assert.strictEqual(ts.points.length, 1);
-      assert.deepStrictEqual(ts.points[0].value, {"doubleValue": 10});
+      assert.deepStrictEqual(ts.points[0].value, { doubleValue: 10 });
     });
   });
 });

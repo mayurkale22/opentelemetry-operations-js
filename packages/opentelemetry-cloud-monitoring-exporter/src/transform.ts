@@ -104,7 +104,8 @@ function transformValueType(valueType: OTValueType): ValueType {
  */
 export function createTimeSeries(
   metric: MetricRecord,
-  metricPrefix: string
+  metricPrefix: string,
+  startTime: string
 ): TimeSeries {
   return {
     metric: transformMetric(metric, metricPrefix),
@@ -113,7 +114,12 @@ export function createTimeSeries(
     metricKind: transformMetricKind(metric.descriptor.metricKind),
     valueType: transformValueType(metric.descriptor.valueType),
     points: [
-      transformPoint(metric.descriptor.valueType, metric.aggregator.value()),
+      transformPoint(
+        metric.descriptor.valueType,
+        metric.aggregator.value(),
+        metric.descriptor.metricKind,
+        startTime
+      ),
     ],
   };
 }
@@ -142,14 +148,22 @@ function transformMetric(
  */
 function transformPoint(
   valueType: OTValueType,
-  value: number | OTDistribution
+  value: number | OTDistribution,
+  metricKind: OTMetricKind,
+  startTime: string
 ): Point {
   // TODO: Add endTime and startTime support, once available in OpenTelemetry
   // Related issues: https://github.com/open-telemetry/opentelemetry-js/pull/893
   // and https://github.com/open-telemetry/opentelemetry-js/issues/488
+  if (metricKind === OTMetricKind.COUNTER) {
+    return {
+      value: transformValue(valueType, value),
+      interval: { startTime, endTime: new Date().toISOString() },
+    };
+  }
   return {
-    interval: { endTime: new Date().toISOString() },
     value: transformValue(valueType, value),
+    interval: { endTime: new Date().toISOString() },
   };
 }
 
